@@ -1,0 +1,23 @@
+{
+    "protocol_id": "bas_experiment",
+    "name": "Acid Poured Before Water - Safety Check",
+    "description": "Detects whether water is poured before acid during the demo experiment.",
+    "steps": [
+        {
+            "step_id": 1,
+            "action": "pour",
+            "object": "water",
+            "required_first": true,
+            "correct_message": "Good. Water poured first, as expected.",
+            "warning_message": "Warning: Water must be poured before acid. Please pour water first."
+        },
+        {
+            "step_id": 2,
+            "action": "pour",
+            "object": "acid",
+            "required_first": false,
+            "correct_message": "Good. Acid poured after water, sequence correct.",
+            "warning_message": "Warning: Acid was poured before water. This is unsafe. Stop and pour water first."
+        }
+    ]
+}
