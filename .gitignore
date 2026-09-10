@@ -1,0 +1,35 @@
+﻿# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+env/
+.venv/
+*.egg-info/
+
+# Node
+node_modules/
+frontend/build/
+frontend/dist/
+npm-debug.log*
+
+# Env files
+.env
+*.env.local
+
+# Model weights & datasets (too large for git)
+ai_pipeline/activity_classifier/weights/*
+!ai_pipeline/activity_classifier/weights/.gitkeep
+data/datasets/*
+!data/datasets/.gitkeep
+
+# Logs / DB
+data/logs/*
+!data/logs/.gitkeep
+*.db
+*.sqlite3
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
