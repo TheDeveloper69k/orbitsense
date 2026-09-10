@@ -33,3 +33,5 @@ data/logs/*
 .DS_Store
 .vscode/
 .idea/
+
+yolo26x.pt

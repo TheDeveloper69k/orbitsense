@@ -1,0 +1,16 @@
+path: dataset
+
+train: images/train
+val: images/val
+
+nc: 8
+
+names:
+  0: bottle
+  1: bottle_cap
+  2: tape
+  3: water
+  4: acid
+  5: lemon
+  6: keys
+  7: remote
