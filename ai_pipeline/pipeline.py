@@ -23,11 +23,22 @@ from ai_pipeline.voice_alerts.tts_engine import speak
 
 
 class OrbitSensePipeline:
-    def __init__(self, protocol_path=None, enable_voice=True):
-        self.detector = get_detector()
+    def __init__(self, protocol_path=None, enable_voice=True, enable_generic_objects=True):
+        self.detector = get_detector()  # color-based: drives safety logic
         self.hand_tracker = HandTracker()
         self.rule_engine = RuleEngine(protocol_path) if protocol_path else RuleEngine()
         self.enable_voice = enable_voice
+
+        # Generic YOLO object labeling (bottle, scissors, etc.) — informational
+        # only, does not affect rule_engine decisions. Optional/gracefully
+        # disabled if ultralytics/model isn't available.
+        self.generic_detector = None
+        if enable_generic_objects:
+            try:
+                from ai_pipeline.object_detection.generic_object_detector import GenericObjectDetector
+                self.generic_detector = GenericObjectDetector()
+            except Exception as e:
+                print(f"[Pipeline] Generic object detection unavailable ({e}). Continuing without it.")
 
     def reset(self):
         """Restart the demo sequence (e.g. before a fresh run on stage)."""
@@ -60,10 +71,17 @@ class OrbitSensePipeline:
 
     def annotate_frame(self, frame):
         """
-        Optional: draws bounding boxes + hand landmarks on the frame for
-        the live camera feed shown on the dashboard. Call this separately
-        from process_frame if you want a clean video stream either way.
+        Draws bounding boxes + hand landmarks on the frame for the live
+        camera feed shown on the dashboard. Call this separately from
+        process_frame if you want a clean video stream either way.
+
+        Draws TWO kinds of boxes:
+        - Color-based water/acid boxes (the ones driving safety logic)
+        - Generic YOLO object labels (bottle, scissors, etc.) if enabled —
+          purely informational, shown in a different color to distinguish
+          them from the safety-critical boxes.
         """
+        # Safety-critical detections (color-based)
         detections = self.detector.detect(frame)
         hand_points = self.hand_tracker.get_hand_points(frame)
 
@@ -73,6 +91,16 @@ class OrbitSensePipeline:
             cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
             cv2.putText(frame, det["label"].upper(), (x, y - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+
+        # Generic object labels (informational only, doesn't affect rule engine)
+        if self.generic_detector:
+            generic_detections = self.generic_detector.detect(frame)
+            for det in generic_detections:
+                x, y, w, h = det["bbox"]
+                label_text = f'{det["label"]} {det["confidence"]:.2f}'
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 200, 255), 1)
+                cv2.putText(frame, label_text, (x, y + h + 18),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 200, 255), 1)
 
         frame = self.hand_tracker.draw_landmarks(frame, hand_points)
         return frame

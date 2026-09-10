@@ -1,9 +1,15 @@
-"""
-Hand tracking for OrbitSense demo.
+#mediapipe_pose.py
 
-Uses MediaPipe Hands to find hand landmarks, then checks proximity between
-the hand (index fingertip + wrist) and each detected object's bounding box
-to figure out which container is being picked up / poured.
+"""
+Hand tracking + full-body pose tracking for OrbitSense demo.
+
+HandTracker uses MediaPipe Hands to find hand landmarks, then checks
+proximity between the hand (index fingertip + wrist) and each detected
+object's bounding box to figure out which container is being picked
+up / poured.
+
+PoseTracker uses MediaPipe Pose to draw the full-body skeleton on the
+live monitoring feed (does not affect object-pickup detection logic).
 """
 
 import math
@@ -11,7 +17,9 @@ import cv2
 import mediapipe as mp
 
 mp_hands = mp.solutions.hands
+mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
+mp_drawing_styles = mp.solutions.drawing_styles
 
 # How close (in pixels) the hand needs to be to an object's bbox center
 # to count as "holding" it. Tune this based on your camera distance.
@@ -58,6 +66,52 @@ class HandTracker:
         return frame
 
 
+class PoseTracker:
+    """
+    Tracks full-body pose landmarks using MediaPipe Pose and draws the
+    body skeleton on the frame. Separate from HandTracker — does not
+    feed into find_picked_object, only used for the visual overlay.
+    """
+
+    def __init__(self, detection_confidence=0.5, tracking_confidence=0.5):
+        self.pose = mp_pose.Pose(
+            static_image_mode=False,
+            model_complexity=1,
+            min_detection_confidence=detection_confidence,
+            min_tracking_confidence=tracking_confidence,
+        )
+        self._last_results = None
+
+    def get_pose_points(self, frame):
+        """
+        Runs pose detection on a BGR frame and returns a list of
+        (x, y, visibility) tuples for the 33 body landmarks, or an
+        empty list if no person is detected.
+        """
+        h, w, _ = frame.shape
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = self.pose.process(rgb)
+        self._last_results = results
+
+        points = []
+        if results.pose_landmarks:
+            for lm in results.pose_landmarks.landmark:
+                points.append((int(lm.x * w), int(lm.y * h), lm.visibility))
+
+        return points
+
+    def draw_landmarks(self, frame, pose_points=None):
+        """Draws the last-detected body skeleton onto the frame."""
+        if self._last_results and self._last_results.pose_landmarks:
+            mp_drawing.draw_landmarks(
+                frame,
+                self._last_results.pose_landmarks,
+                mp_pose.POSE_CONNECTIONS,
+                landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style(),
+            )
+        return frame
+
+
 def _bbox_center(bbox):
     x, y, w, h = bbox
     return (x + w // 2, y + h // 2)
@@ -96,6 +150,7 @@ if __name__ == "__main__":
     from ai_pipeline.object_detection.yolo_detector import get_detector
 
     tracker = HandTracker()
+    pose_tracker = PoseTracker()
     detector = get_detector()
     cap = cv2.VideoCapture(0)
 
@@ -105,10 +160,12 @@ if __name__ == "__main__":
             break
 
         hand_points = tracker.get_hand_points(frame)
+        pose_points = pose_tracker.get_pose_points(frame)
         detections = detector.detect(frame)
         picked = find_picked_object(hand_points, detections)
 
-        frame = tracker.draw_landmarks(frame, hand_points)
+        frame = pose_tracker.draw_landmarks(frame, pose_points)  # body first
+        frame = tracker.draw_landmarks(frame, hand_points)       # hands on top
         for det in detections:
             x, y, w, h = det["bbox"]
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
